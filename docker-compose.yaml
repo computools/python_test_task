@@ -1,0 +1,56 @@
+version: "3"
+
+services:
+  rabbit-mq:
+    image: rabbitmq:3-management-alpine
+    container_name: coinmena_rabbit_mq
+    env_file: ".env"
+    expose:
+      - "5672"
+    ports:
+      - "5672:5672"
+
+  postgres:
+    image: postgres:13.3
+    container_name: coinmena_postgres
+    env_file: ".env"
+    expose:
+      - "5432"
+    ports:
+      - "5432:5432"
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+
+  django: &django
+    stdin_open: true
+    tty: true
+    restart: always
+    build:
+      context: .
+    image: coinmena_django
+    container_name: coinmena_django
+    env_file: ".env"
+    expose:
+      - "8000"
+    ports:
+      - "8000:8000"
+    depends_on:
+      - postgres
+      - rabbit-mq
+    volumes:
+      - ./pyproject.toml:/app/pyproject.toml
+      - ./poetry.lock:/app/poetry.lock
+      - ./.flake8:/app/.flake8
+      - ./src:/app/src
+
+  celerybeat:
+    <<: *django
+    container_name: coinmena_celeryworker
+    depends_on:
+      - rabbit-mq
+      - postgres
+    ports: []
+    command: bash -c "celery -A config worker -l INFO -B"
+
+volumes:
+  pg_data: {}
